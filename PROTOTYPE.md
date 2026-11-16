@@ -4,10 +4,23 @@ Prove the idea works before buying the expensive screen or printing anything. Th
 
 | Stage | What you need | Cost | Soldering | What it proves |
 |-------|---------------|------|-----------|----------------|
-| **1. Board only** | ESP32-C3 SuperMini + a USB-C data cable | ≈ ₹300 | none | press → Timer starts/stops; the board's LED shows recording |
-| **2. Board + small screen** | + 0.96" I2C OLED, a push button, breadboard, jumper wires | + ≈ ₹400 | the board's 2 header strips | the screen shows running time, app, today's total |
+| **1. Board only** | ESP32-C3 SuperMini + a USB-C data cable | ₹399 | none | press → Timer starts/stops; the board's LED shows recording |
+| **2. Board + small screen** | + 0.96" I2C OLED, a push button, breadboard, jumper wires | + ₹733 | none (with the pre-soldered board) | the screen shows running time, app, today's total |
 
 The **real 3.12" screen and the press-bar case** come after stage 2 works.
+
+## Shopping list (Amazon.in, checked 16 Nov 2026)
+
+| For | Part | Price | Link |
+|-----|------|-------|------|
+| Stage 1 | ESP32-C3 SuperMini, **header pins already soldered** (OceanLabz) | ₹399 | [amazon.in/dp/B0D2DM322M](https://www.amazon.in/dp/B0D2DM322M) |
+| Stage 2 | 0.96" OLED, I2C, 4-pin, SSD1306, white (Tishvi) | ₹325 | [amazon.in/dp/B0GZ4HKDNN](https://www.amazon.in/dp/B0GZ4HKDNN) |
+| Stage 2 | 400-point breadboard + 60 jumper wires (Electronic Spices) | ₹259 | [amazon.in/dp/B0CP25NH8Z](https://www.amazon.in/dp/B0CP25NH8Z) |
+| Stage 2 | 12 mm tactile push buttons with caps, 15 pcs | ₹149 | [amazon.in/dp/B08JZHFQ4T](https://www.amazon.in/dp/B08JZHFQ4T) |
+
+That's ₹399 for stage 1 and about ₹1,130 for everything. You also need a USB-C **data** cable.
+
+Robu.in has the SuperMini for ₹289–299, but it was out of stock when checked.
 
 ---
 
@@ -61,7 +74,7 @@ If all of that works, **the idea works**. Everything after this is just a nicer 
 | A push button: a 12 mm tactile button, any arcade button, or the Kailh Choc switch from the final parts list | ₹10–60 |
 | Half-size breadboard + male-to-male jumper wires | ₹150 |
 
-The SuperMini usually comes with loose header pins. Solder them on, which is 16 pins and about 10 minutes, then push the board into the breadboard. Or ask the shop for one with headers already soldered.
+The board in the shopping list comes with its header pins already soldered, so it pushes straight into the breadboard with **no soldering at all**. Other SuperMinis often come with loose pins, which take about 10 minutes to solder.
 
 ### Wire it (6 wires, no soldering on the breadboard)
 
