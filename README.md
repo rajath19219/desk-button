@@ -10,6 +10,8 @@ A clean little block for your desk: a wide screen on the front and one long pres
 
 Ready-to-print STL files are in [`stl/`](stl/).
 
+> **Start with the prototype.** [PROTOTYPE.md](PROTOTYPE.md) tests the whole idea with just the ₹300 board (its own button and LED), then adds a ₹200 screen. There's no printing and almost no soldering.
+
 - **Press** the bar to start or stop the Timer. **Hold for 0.7 s** to open the Timer window.
 - **While recording**, the screen shows a big running clock, a blinking REC dot, the current app and today's total.
 - **When ready**, it shows today's total and dims after 10 minutes of no use.
@@ -93,7 +95,7 @@ The OLED must be set to **4-wire SPI**. Most are sold that way, and the seller's
 ## 4. Flash the firmware
 
 1. Install **VS Code** (already on this PC) and the **PlatformIO IDE** extension.
-2. **File → Open Folder** → `desk-button\firmware`, plug in the board, and click the **→ Upload** arrow in the bottom bar.
+2. **File → Open Folder** → `desk-button\firmware`, plug in the board, then in the PlatformIO sidebar choose **Project Tasks → final → Upload**. The plain → Upload arrow builds the `bare` prototype.
 3. If uploading fails, hold the board's **BOOT** button, tap **RST**, release BOOT, and upload again.
 
 **Test it on the desk before closing the case.** The screen should say *Waiting for PC*.

@@ -194,6 +194,8 @@ def run() -> None:
                 ser.write((status_line() + "\n").encode())
                 next_status = time.monotonic() + 1.0
             line = ser.readline().decode(errors="ignore").strip()
+            if line:
+                log.info("button says: %s", line)
             if line == "TOGGLE":
                 toggle()
                 next_status = time.monotonic() + 0.4   # let the Timer write, then refresh the display
@@ -224,11 +226,17 @@ def main() -> None:
             print(p.device, hex(p.vid) if p.vid else "-", p.description)
         return
 
+    console = "--console" in args   # for testing: show everything in this window
     kernel32.CreateMutexW(None, False, BRIDGE_MUTEX)
     if ctypes.get_last_error() == 183:   # already running
+        if console:
+            print("Another bridge is already running (check Task Manager for pythonw.exe). Close it first.")
         return
-    handler = RotatingFileHandler(HERE / "bridge.log", maxBytes=200_000, backupCount=1, encoding="utf-8")
-    logging.basicConfig(handlers=[handler], level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    handlers = [RotatingFileHandler(HERE / "bridge.log", maxBytes=200_000, backupCount=1, encoding="utf-8")]
+    if console:
+        handlers.append(logging.StreamHandler(sys.stdout))
+        print("Bridge running. Plug in the button and press it. Ctrl+C to stop.")
+    logging.basicConfig(handlers=handlers, level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     log.info("bridge started; database %s", find_db())
     run()
 

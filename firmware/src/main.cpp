@@ -1,6 +1,13 @@
 // Desk Button for Simple Timer (v2: wide OLED + press bar)
 // ESP32-C3 SuperMini + 3.12" 256x64 SSD1322 OLED (4-wire SPI) + one keyboard switch under the bar.
 //
+// DISPLAY_KIND (set per build in platformio.ini):
+//   0 = no display: bare board, press its BOOT button, blue LED = recording   (prototype stage 1)
+//   1 = 0.96" SSD1306 128x64 I2C OLED                                         (prototype stage 2)
+//   3 = 1.3"  SH1106  128x64 I2C OLED (same wiring as 1)
+//   2 = 3.12" SSD1322 256x64 SPI OLED                                         (the real build)
+// The board's own BOOT button and blue LED work in every build.
+//
 // Talks to bridge.py on the PC over USB serial (115200, one text line per message):
 //   device -> PC   "HELLO desk-button 1"   reply to "?" (lets the bridge find the right COM port)
 //                  "TOGGLE"                short press: start/stop the timer
@@ -10,7 +17,12 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <U8g2lib.h>
+
+#ifndef DISPLAY_KIND
+#define DISPLAY_KIND 2
+#endif
 
 // ------------------------------------------------------------------ pins (see wiring.svg)
 constexpr int PIN_SCK    = 4;   // OLED SCL / CLK / D0
@@ -19,6 +31,10 @@ constexpr int PIN_CS     = 7;
 constexpr int PIN_DC     = 10;
 constexpr int PIN_RST    = 3;
 constexpr int PIN_BUTTON = 5;   // switch between this pin and GND
+constexpr int PIN_BOOT   = 9;   // the board's own BOOT button (fine to use once it has started)
+constexpr int PIN_LED    = 8;   // the board's own blue LED (on when LOW)
+constexpr int PIN_I2C_SDA = 6;  // small I2C OLED (prototype only)
+constexpr int PIN_I2C_SCL = 4;
 
 // ------------------------------------------------------------------ tuning
 constexpr uint32_t DEBOUNCE_MS   = 25;
@@ -29,7 +45,14 @@ constexpr uint8_t  BRIGHT_REC    = 200;
 constexpr uint8_t  BRIGHT_IDLE   = 60;
 constexpr uint8_t  BRIGHT_DIM    = 6;
 
+#if DISPLAY_KIND == 1
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
+#elif DISPLAY_KIND == 3
+U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
+#elif DISPLAY_KIND == 2
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(U8G2_R0, PIN_CS, PIN_DC, PIN_RST);
+#endif
+#define HAS_DISPLAY (DISPLAY_KIND != 0)
 
 // ------------------------------------------------------------------ state from the PC
 bool     running    = false;
@@ -89,7 +112,7 @@ void pollButton() {
   static bool stable = HIGH, last = HIGH, longSent = false;
   static uint32_t changedAt = 0, pressedAt = 0;
 
-  bool raw = digitalRead(PIN_BUTTON);
+  bool raw = digitalRead(PIN_BUTTON) && digitalRead(PIN_BOOT);   // LOW = either one pressed
   uint32_t now = millis();
   if (raw != last) { last = raw; changedAt = now; }
   if (now - changedAt >= DEBOUNCE_MS && raw != stable) {
@@ -116,6 +139,17 @@ void pollButton() {
   }
 }
 
+// ------------------------------------------------------------------ board LED
+void updateLed() {
+  uint32_t now = millis();
+  bool on;
+  if (now < flashUntil)  on = !running;               // quick blip so you see the press
+  else if (!online())    on = (now % 2000) < 100;     // short blink every 2 s: PC not talking
+  else                   on = running;                // solid = recording
+  digitalWrite(PIN_LED, on ? LOW : HIGH);
+}
+
+#if HAS_DISPLAY
 // ------------------------------------------------------------------ drawing
 void fmtClock(uint32_t s, char *out, size_t n) {          // 24:07  or  1:02:45
   uint32_t h = s / 3600, m = (s / 60) % 60, sec = s % 60;
@@ -140,6 +174,7 @@ void drawFitted(const char *s, int x, int y, int maxW) { // clip long app names 
   oled.drawStr(x, y, buf);
 }
 
+#if DISPLAY_KIND == 2
 void drawScreen() {
   uint32_t now = millis();
   bool on = online();
@@ -196,15 +231,68 @@ void drawScreen() {
   if (now < flashUntil) oled.drawFrame(0, 0, 256, 64);   // "press seen"
   oled.sendBuffer();
 }
+#else
+// 128x64 prototype screen: status line, big clock, app name
+void drawScreen() {
+  uint32_t now = millis();
+  bool on = online();
+  oled.clearBuffer();
+  char big[16], small[24];
+  oled.setFont(u8g2_font_helvR08_tr);
+  if (!on) {
+    oled.setFont(u8g2_font_helvB10_tr);
+    const char *t = everHeard ? "PC offline" : "Waiting for PC";
+    oled.drawStr(64 - oled.getStrWidth(t) / 2, 30, t);
+    oled.setFont(u8g2_font_helvR08_tr);
+    oled.drawStr(64 - oled.getStrWidth("run bridge.py") / 2, 48, "run bridge.py");
+  } else {
+    fmtDuration(todayNow(), small, sizeof(small));
+    char today[32];
+    snprintf(today, sizeof(today), "today %s", small);
+    oled.drawStr(128 - oled.getStrWidth(today), 10, today);
+    oled.setFont(u8g2_font_helvB08_tr);
+    if (running) {
+      if ((now / 1000) % 2 == 0) oled.drawDisc(4, 5, 3); else oled.drawCircle(4, 5, 3);
+      oled.drawStr(11, 10, "REC");
+      fmtClock(elapsedNow(), big, sizeof(big));
+      oled.setFont(u8g2_font_logisoso28_tn);
+      if (oled.getStrWidth(big) > 124) oled.setFont(u8g2_font_logisoso22_tn);
+      oled.drawStr(64 - oled.getStrWidth(big) / 2, 47, big);
+      oled.setFont(u8g2_font_helvR08_tr);
+      drawFitted(appName[0] ? appName : "-", 2, 62, 124);
+    } else {
+      oled.drawCircle(4, 5, 3);
+      oled.drawStr(11, 10, "READY");
+      oled.setFont(u8g2_font_logisoso22_tf);
+      fmtDuration(todayNow(), big, sizeof(big));
+      oled.drawStr(64 - oled.getStrWidth(big) / 2, 44, big);
+      oled.setFont(u8g2_font_helvR08_tr);
+      oled.drawStr(64 - oled.getStrWidth("press to start") / 2, 62, "press to start");
+    }
+  }
+  if (now < flashUntil) oled.drawFrame(0, 0, 128, 64);
+  oled.sendBuffer();
+}
+#endif
+#endif  // HAS_DISPLAY
 
 // ------------------------------------------------------------------ main
 void setup() {
   Serial.begin(115200);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_BOOT, INPUT_PULLUP);
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, HIGH);
+#if DISPLAY_KIND == 2
   SPI.begin(PIN_SCK, -1, PIN_MOSI, -1);   // our pins; U8g2 then reuses this SPI bus
   oled.setBusClock(10000000);
+#elif HAS_DISPLAY
+  Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+#endif
+#if HAS_DISPLAY
   oled.begin();
   oled.setFontMode(1);
+#endif
   changedMs = millis();
   Serial.println("HELLO desk-button 1");
 }
@@ -214,6 +302,9 @@ void loop() {
   readSerial();
   pollButton();
   uint32_t now = millis();
+  updateLed();
+#if HAS_DISPLAY
   if (now - lastDraw >= 100) { lastDraw = now; drawScreen(); }
+#endif
   delay(2);
 }
