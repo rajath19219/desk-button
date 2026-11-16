@@ -1,5 +1,5 @@
-// Desk Button for Simple Timer
-// ESP32-C3 SuperMini + 1.28" round GC9A01 display + WS2812 16-LED ring + 30 mm arcade button.
+// Desk Button for Simple Timer (v2: wide OLED + press bar)
+// ESP32-C3 SuperMini + 3.12" 256x64 SSD1322 OLED (4-wire SPI) + one keyboard switch under the bar.
 //
 // Talks to bridge.py on the PC over USB serial (115200, one text line per message):
 //   device -> PC   "HELLO desk-button 1"   reply to "?" (lets the bridge find the right COM port)
@@ -9,53 +9,37 @@
 //                  "?"                     who are you?
 
 #include <Arduino.h>
-#include <Arduino_GFX_Library.h>
-#include <Adafruit_NeoPixel.h>
+#include <SPI.h>
+#include <U8g2lib.h>
 
 // ------------------------------------------------------------------ pins (see wiring.svg)
-constexpr int PIN_TFT_SCK  = 4;
-constexpr int PIN_TFT_MOSI = 6;   // labelled SDA on most displays
-constexpr int PIN_TFT_CS   = 7;
-constexpr int PIN_TFT_DC   = 10;
-constexpr int PIN_TFT_RST  = 3;
-constexpr int PIN_TFT_BL   = 1;   // backlight; leave unconnected if your module has no BL pin
-constexpr int PIN_BUTTON   = 5;   // arcade button between this pin and GND
-constexpr int PIN_LEDS     = 0;   // WS2812 ring DIN (through a 330 Ω resistor)
-constexpr int NUM_LEDS     = 16;
+constexpr int PIN_SCK    = 4;   // OLED SCL / CLK / D0
+constexpr int PIN_MOSI   = 6;   // OLED SDA / DIN / D1
+constexpr int PIN_CS     = 7;
+constexpr int PIN_DC     = 10;
+constexpr int PIN_RST    = 3;
+constexpr int PIN_BUTTON = 5;   // switch between this pin and GND
 
 // ------------------------------------------------------------------ tuning
 constexpr uint32_t DEBOUNCE_MS   = 25;
 constexpr uint32_t LONG_PRESS_MS = 700;
-constexpr uint32_t OFFLINE_MS    = 4000;  // no status from the PC for this long -> "PC offline"
-constexpr uint8_t  LED_MAX       = 70;    // brightness cap (0-255); also keeps current low
+constexpr uint32_t OFFLINE_MS    = 4000;        // no status from the PC for this long -> "PC offline"
+constexpr uint32_t DIM_AFTER_MS  = 10UL * 60 * 1000;   // idle this long -> very dim (protects the OLED)
+constexpr uint8_t  BRIGHT_REC    = 200;
+constexpr uint8_t  BRIGHT_IDLE   = 60;
+constexpr uint8_t  BRIGHT_DIM    = 6;
 
-// ------------------------------------------------------------------ hardware objects
-Arduino_DataBus *bus   = new Arduino_HWSPI(PIN_TFT_DC, PIN_TFT_CS, PIN_TFT_SCK, PIN_TFT_MOSI, GFX_NOT_DEFINED);
-Arduino_GFX     *panel = new Arduino_GC9A01(bus, PIN_TFT_RST, 0 /*rotation*/, true /*IPS*/);
-Arduino_Canvas  *gfx   = new Arduino_Canvas(240, 240, panel);   // draw off-screen, then flush: no flicker
-Adafruit_NeoPixel ring(NUM_LEDS, PIN_LEDS, NEO_GRB + NEO_KHZ800);
-
-// ------------------------------------------------------------------ colours (RGB565)
-constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
-  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-}
-const uint16_t C_BG      = rgb(0, 0, 0);
-const uint16_t C_REC     = rgb(255, 72, 72);
-const uint16_t C_IDLE    = rgb(80, 220, 140);
-const uint16_t C_OFF     = rgb(255, 176, 64);
-const uint16_t C_TEXT    = rgb(235, 235, 240);
-const uint16_t C_MUTED   = rgb(120, 124, 135);
-const uint16_t C_GHOST   = rgb(24, 26, 30);    // unlit 7-segment bars
-const uint16_t C_TICK    = rgb(40, 42, 48);
+U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(U8G2_R0, PIN_CS, PIN_DC, PIN_RST);
 
 // ------------------------------------------------------------------ state from the PC
 bool     running    = false;
 uint32_t elapsedAt  = 0;     // elapsed seconds when the last status arrived
 uint32_t todayAt    = 0;     // today's total seconds when the last status arrived
 uint32_t statusMs   = 0;     // millis() when the last status arrived
+uint32_t changedMs  = 0;     // last time running/idle changed or the bar was pressed
 bool     everHeard  = false;
 char     appName[40] = "";
-uint32_t flashUntil = 0;     // white flash on the ring after a press
+uint32_t flashUntil = 0;     // brief frame around the screen after a press
 
 // ------------------------------------------------------------------ serial protocol
 void handleLine(char *line) {
@@ -64,10 +48,10 @@ void handleLine(char *line) {
     return;
   }
   if (line[0] == 'S' && line[1] == ' ') {
-    int run = 0;
+    int run = 0, used = 0;
     unsigned long el = 0, td = 0;
-    int used = 0;
     if (sscanf(line + 2, "%d %lu %lu %n", &run, &el, &td, &used) >= 3) {
+      if ((run == 1) != running) changedMs = millis();
       running   = run == 1;
       elapsedAt = el;
       todayAt   = td;
@@ -96,30 +80,28 @@ void readSerial() {
 }
 
 bool online() { return everHeard && millis() - statusMs < OFFLINE_MS; }
-
-uint32_t elapsedNow() {
-  return running ? elapsedAt + (millis() - statusMs) / 1000 : elapsedAt;
-}
+uint32_t sinceStatus() { return (millis() - statusMs) / 1000; }
+uint32_t elapsedNow() { return running ? elapsedAt + sinceStatus() : elapsedAt; }
+uint32_t todayNow() { return running ? todayAt + sinceStatus() : todayAt; }
 
 // ------------------------------------------------------------------ button
 void pollButton() {
-  static bool stable = HIGH, last = HIGH;
+  static bool stable = HIGH, last = HIGH, longSent = false;
   static uint32_t changedAt = 0, pressedAt = 0;
-  static bool longSent = false;
 
   bool raw = digitalRead(PIN_BUTTON);
   uint32_t now = millis();
   if (raw != last) { last = raw; changedAt = now; }
   if (now - changedAt >= DEBOUNCE_MS && raw != stable) {
     stable = raw;
-    if (stable == LOW) {                       // pressed
+    if (stable == LOW) {                        // pressed
       pressedAt = now;
       longSent = false;
-    } else if (!longSent) {                    // released after a short press
+    } else if (!longSent) {                     // released after a short press
       Serial.println("TOGGLE");
       flashUntil = now + 150;
-      // Show the change straight away; the PC's next status corrects us if needed.
-      if (online()) {
+      changedMs = now;
+      if (online()) {                           // show it straight away; the PC corrects us if needed
         running = !running;
         elapsedAt = 0;
         statusMs = now;
@@ -130,174 +112,108 @@ void pollButton() {
     Serial.println("SHOW");
     longSent = true;
     flashUntil = now + 300;
+    changedMs = now;
   }
 }
 
-// ------------------------------------------------------------------ LED ring
-void updateRing() {
-  uint32_t now = millis();
-  uint32_t c;
-  if (now < flashUntil) {
-    c = ring.Color(LED_MAX, LED_MAX, LED_MAX);
-  } else if (!online()) {
-    // slow amber "breathing": the PC side isn't talking to us
-    float k = 0.5f - 0.5f * cosf(now / 1600.0f * 2 * PI);
-    c = ring.Color(uint8_t(LED_MAX * 0.5f * k), uint8_t(LED_MAX * 0.25f * k), 0);
-  } else if (running) {
-    // red, gently breathing between 40% and 100%
-    float k = 0.7f - 0.3f * cosf(now / 2400.0f * 2 * PI);
-    c = ring.Color(uint8_t(LED_MAX * k), 0, 0);
-  } else {
-    c = ring.Color(0, LED_MAX / 6, 0);           // dim green: ready
-  }
-  for (int i = 0; i < NUM_LEDS; i++) ring.setPixelColor(i, c);
-  ring.show();
+// ------------------------------------------------------------------ drawing
+void fmtClock(uint32_t s, char *out, size_t n) {          // 24:07  or  1:02:45
+  uint32_t h = s / 3600, m = (s / 60) % 60, sec = s % 60;
+  if (h) snprintf(out, n, "%lu:%02lu:%02lu", (unsigned long)h, (unsigned long)m, (unsigned long)sec);
+  else   snprintf(out, n, "%02lu:%02lu", (unsigned long)m, (unsigned long)sec);
 }
 
-// ------------------------------------------------------------------ drawing helpers
-// segments: bit0=a(top) 1=b(top right) 2=c(bottom right) 3=d(bottom) 4=e(bottom left) 5=f(top left) 6=g(middle)
-const uint8_t DIGITS[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};
-
-void drawDigit(int x, int y, int w, int h, int t, int d, uint16_t on) {
-  uint8_t m = DIGITS[d];
-  int r = t / 2, hx = x + r + 1, hw = w - t - 2, vh = h / 2 - r - 2;
-  auto seg = [&](int bit, int sx, int sy, int sw, int sh) {
-    gfx->fillRoundRect(sx, sy, sw, sh, r, (m >> bit) & 1 ? on : C_GHOST);
-  };
-  seg(0, hx, y, hw, t);                          // a
-  seg(6, hx, y + h / 2 - r, hw, t);              // g
-  seg(3, hx, y + h - t, hw, t);                  // d
-  seg(5, x, y + r + 1, t, vh);                   // f
-  seg(1, x + w - t, y + r + 1, t, vh);           // b
-  seg(4, x, y + h / 2 + 1, t, vh);               // e
-  seg(2, x + w - t, y + h / 2 + 1, t, vh);       // c
-}
-
-// "mm:ss" under an hour, "h:mm:ss" after that, centred at (cx, cy)
-void drawClock(uint32_t secs, int cx, int cy, uint16_t color) {
-  uint32_t h = secs / 3600, m = (secs / 60) % 60, s = secs % 60;
-  int digits[6], n = 0, colonsAfter[2] = {-1, -1};
-  if (h > 0) {
-    if (h > 9) digits[n++] = (h / 10) % 10;
-    digits[n++] = h % 10; colonsAfter[0] = n - 1;
-    digits[n++] = m / 10; digits[n++] = m % 10; colonsAfter[1] = n - 1;
-  } else {
-    digits[n++] = m / 10; digits[n++] = m % 10; colonsAfter[0] = n - 1;
-  }
-  digits[n++] = s / 10; digits[n++] = s % 10;
-
-  bool big = h == 0;
-  int w = big ? 34 : 24, hgt = big ? 62 : 46, t = big ? 8 : 6, gap = big ? 7 : 5, colon = big ? 14 : 10;
-  int colons = (colonsAfter[0] >= 0) + (colonsAfter[1] >= 0);
-  int total = n * w + (n - 1) * gap + colons * colon;
-  int x = cx - total / 2, y = cy - hgt / 2;
-  for (int i = 0; i < n; i++) {
-    drawDigit(x, y, w, hgt, t, digits[i], color);
-    x += w + gap;
-    if (i == colonsAfter[0] || i == colonsAfter[1]) {
-      int dx = x - gap / 2 + colon / 2;
-      gfx->fillCircle(dx, y + hgt / 3, t / 2, color);
-      gfx->fillCircle(dx, y + 2 * hgt / 3, t / 2, color);
-      x += colon;
-    }
-  }
-}
-
-void centredText(const char *s, int cy, uint8_t size, uint16_t color) {
-  int len = strlen(s);
-  gfx->setTextSize(size);
-  gfx->setTextColor(color);
-  gfx->setCursor(120 - len * 3 * size, cy - 4 * size);   // built-in font is 6x8 px
-  gfx->print(s);
-}
-
-void fmtDuration(uint32_t secs, char *out, size_t n) {
-  uint32_t m = (secs + 30) / 60, h = m / 60;
+void fmtDuration(uint32_t s, char *out, size_t n) {       // 3h 12m  or  12m
+  uint32_t m = (s + 30) / 60, h = m / 60;
   if (h) snprintf(out, n, "%luh %02lum", (unsigned long)h, (unsigned long)(m % 60));
   else   snprintf(out, n, "%lum", (unsigned long)m);
 }
 
-// ------------------------------------------------------------------ screen
+void drawFitted(const char *s, int x, int y, int maxW) { // clip long app names with ".."
+  char buf[40];
+  strncpy(buf, s, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = 0;
+  while (strlen(buf) > 2 && oled.getStrWidth(buf) > maxW) {
+    size_t n = strlen(buf);
+    buf[n - 3] = '.'; buf[n - 2] = '.'; buf[n - 1] = 0;
+  }
+  oled.drawStr(x, y, buf);
+}
+
 void drawScreen() {
-  uint32_t secs = elapsedNow();
+  uint32_t now = millis();
   bool on = online();
-  uint16_t accent = !on ? C_OFF : running ? C_REC : C_IDLE;
+  // move everything by a pixel or two each minute so nothing burns into the OLED
+  int ox = int((now / 60000) % 5) - 2, oy = int((now / 60000 / 5) % 3) - 1;
+  uint8_t bright = !on ? BRIGHT_IDLE : running ? BRIGHT_REC
+                 : (now - changedMs > DIM_AFTER_MS ? BRIGHT_DIM : BRIGHT_IDLE);
+  oled.setContrast(bright);
+  oled.clearBuffer();
 
-  gfx->fillScreen(C_BG);
-
-  // 60 dots around the edge: the seconds hand while recording
-  int lit = running && on ? (secs % 60) + 1 : 0;
-  for (int i = 0; i < 60; i++) {
-    float a = (i / 60.0f) * 2 * PI - PI / 2;
-    int x = 120 + cosf(a) * 112, y = 120 + sinf(a) * 112;
-    bool five = i % 5 == 0;
-    gfx->fillCircle(x, y, five ? 3 : 2, i < lit ? accent : C_TICK);
-  }
-
+  char big[16], small[24];
   if (!on) {
-    centredText(everHeard ? "PC OFFLINE" : "WAITING", 92, 2, C_OFF);
-    centredText("start bridge.py", 130, 1, C_MUTED);
-    centredText("on the PC", 144, 1, C_MUTED);
+    oled.setFont(u8g2_font_helvB14_tr);
+    const char *t = everHeard ? "PC offline" : "Waiting for PC";
+    oled.drawStr(128 - oled.getStrWidth(t) / 2 + ox, 32 + oy, t);
+    oled.setFont(u8g2_font_helvR08_tr);
+    const char *h = "start bridge.py on the PC";
+    oled.drawStr(128 - oled.getStrWidth(h) / 2 + ox, 50 + oy, h);
+  } else if (running) {
+    // left: big running time
+    fmtClock(elapsedNow(), big, sizeof(big));
+    oled.setFont(u8g2_font_logisoso42_tn);
+    if (oled.getStrWidth(big) > 168) oled.setFont(u8g2_font_logisoso32_tn);
+    oled.drawStr(6 + ox, 53 + oy, big);
+    // right: REC, app, today
+    int rx = 182 + ox;
+    if ((now / 1000) % 2 == 0) oled.drawDisc(rx + 4, 13 + oy, 4);
+    else                       oled.drawCircle(rx + 4, 13 + oy, 4);
+    oled.setFont(u8g2_font_helvB10_tr);
+    oled.drawStr(rx + 13, 18 + oy, "REC");
+    oled.setFont(u8g2_font_helvR08_tr);
+    drawFitted(appName[0] ? appName : "-", rx, 37 + oy, 256 - rx - 2);
+    fmtDuration(todayNow(), small, sizeof(small));
+    char line[32];
+    snprintf(line, sizeof(line), "today %s", small);
+    oled.drawStr(rx, 53 + oy, line);
+    oled.drawVLine(174 + ox, 8 + oy, 48);
   } else {
-    const char *label = running ? "REC" : "READY";
-    int x0 = 120 - (strlen(label) * 12 + 16) / 2;   // dot + gap + text, centred
-    gfx->fillCircle(x0 + 5, 52, 5, accent);
-    gfx->setTextSize(2);
-    gfx->setTextColor(accent);
-    gfx->setCursor(x0 + 16, 45);
-    gfx->print(label);
-
-    drawClock(secs, 120, 112, running ? C_TEXT : C_MUTED);
-
-    // current app (or a hint when idle), clipped to fit the circle
-    char line[16];
-    if (running && appName[0]) {
-      strncpy(line, appName, sizeof(line) - 1);
-      line[sizeof(line) - 1] = 0;
-      if (strlen(appName) > 13) { line[12] = '.'; line[13] = '.'; line[14] = 0; }
-      centredText(line, 166, 2, C_TEXT);
-    } else if (!running) {
-      centredText("tap to start", 166, 2, C_MUTED);
-    }
-
-    char today[24], dur[16];
-    fmtDuration(todayAt + (running ? (millis() - statusMs) / 1000 : 0), dur, sizeof(dur));
-    snprintf(today, sizeof(today), "today %s", dur);
-    centredText(today, 194, 1, C_MUTED);
+    // ready: today's total big, hint on the right
+    oled.setFont(u8g2_font_helvR08_tr);
+    oled.drawStr(8 + ox, 14 + oy, "TODAY");
+    fmtDuration(todayNow(), big, sizeof(big));
+    oled.setFont(u8g2_font_logisoso32_tf);
+    oled.drawStr(6 + ox, 53 + oy, big);
+    int rx = 182 + ox;
+    oled.drawCircle(rx + 4, 13 + oy, 4);
+    oled.setFont(u8g2_font_helvB10_tr);
+    oled.drawStr(rx + 13, 18 + oy, "READY");
+    oled.setFont(u8g2_font_helvR08_tr);
+    oled.drawStr(rx, 37 + oy, "press the bar");
+    oled.drawStr(rx, 50 + oy, "to start");
+    oled.drawVLine(174 + ox, 8 + oy, 48);
   }
-  gfx->flush();
+  if (now < flashUntil) oled.drawFrame(0, 0, 256, 64);   // "press seen"
+  oled.sendBuffer();
 }
 
 // ------------------------------------------------------------------ main
 void setup() {
   Serial.begin(115200);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
-  pinMode(PIN_TFT_BL, OUTPUT);
-  digitalWrite(PIN_TFT_BL, HIGH);
-
-  ring.begin();
-  ring.clear();
-  ring.show();
-
-  if (!gfx->begin()) {
-    // display missing or wired wrong: blink the ring blue so it's obvious
-    for (;;) {
-      for (int i = 0; i < NUM_LEDS; i++) ring.setPixelColor(i, ring.Color(0, 0, (millis() / 300) % 2 ? 40 : 0));
-      ring.show();
-      delay(50);
-    }
-  }
-  gfx->fillScreen(C_BG);
-  gfx->flush();
+  SPI.begin(PIN_SCK, -1, PIN_MOSI, -1);   // our pins; U8g2 then reuses this SPI bus
+  oled.setBusClock(10000000);
+  oled.begin();
+  oled.setFontMode(1);
+  changedMs = millis();
   Serial.println("HELLO desk-button 1");
 }
 
 void loop() {
-  static uint32_t lastDraw = 0, lastLeds = 0;
+  static uint32_t lastDraw = 0;
   readSerial();
   pollButton();
   uint32_t now = millis();
-  if (now - lastLeds >= 20) { lastLeds = now; updateRing(); }
-  if (now - lastDraw >= 200) { lastDraw = now; drawScreen(); }
+  if (now - lastDraw >= 100) { lastDraw = now; drawScreen(); }
   delay(2);
 }

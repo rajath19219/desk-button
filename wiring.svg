@@ -1,40 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 670" width="900" height="670" font-family="Segoe UI, Arial, sans-serif">
-  <rect width="900" height="670" fill="#fbfbfc"/>
-  <text x="40" y="44" font-size="22" font-weight="600" fill="#1d1f24">Desk Button wiring</text>
-  <text x="40" y="68" font-size="13" fill="#666b75">Solder wires straight to the pads (no header pins). Pin names are printed on each board — match the names, not the positions.</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="900" height="520" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="900" height="520" fill="#fbfbfc"/>
+  <text x="40" y="44" font-size="22" font-weight="600" fill="#1d1f24">Desk Button wiring (9 wires)</text>
+  <text x="40" y="68" font-size="13" fill="#666b75">Solder wires straight to the pads. Pin names are printed on each board — match the names, not the positions.</text>
 
-  <!-- board -->
-  <rect x="40" y="96" width="190" height="530" rx="14" fill="#2f3a6b"/>
+  <rect x="40" y="96" width="190" height="380" rx="14" fill="#2f3a6b"/>
   <rect x="105" y="84" width="60" height="22" rx="5" fill="#c9ccd3"/>
   <text x="135" y="100" font-size="11" text-anchor="middle" fill="#333">USB-C</text>
   <text x="135" y="132" font-size="15" font-weight="600" text-anchor="middle" fill="#fff">ESP32-C3</text>
   <text x="135" y="150" font-size="13" text-anchor="middle" fill="#cdd3ea">SuperMini</text>
 
-  <!-- group labels -->
-  <text x="560" y="128" font-size="15" font-weight="600" fill="#1d1f24">1.28" round display (GC9A01)</text>
-  <text x="560" y="420" font-size="15" font-weight="600" fill="#1d1f24">LED ring (16 × WS2812)</text>
-  <text x="560" y="552" font-size="15" font-weight="600" fill="#1d1f24">Arcade button (microswitch)</text>
+  <text x="560" y="128" font-size="15" font-weight="600" fill="#1d1f24">3.12" OLED 256×64 (SSD1322, SPI)</text>
+  <text x="560" y="398" font-size="15" font-weight="600" fill="#1d1f24">Switch under the bar (Kailh Choc)</text>
 
   <g font-size="14" fill="#1d1f24">
-    <!-- each row: board pin (left), wire, device pin (right) -->
-    <!-- display -->
     <g transform="translate(0,160)"><text x="218" y="5" text-anchor="end" fill="#fff">3V3</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e0453a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e0453a"/><text x="560" y="5">VCC</text></g>
     <g transform="translate(0,192)"><text x="218" y="5" text-anchor="end" fill="#fff">GND</text><line x1="230" y1="0" x2="548" y2="0" stroke="#30333a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#30333a"/><text x="560" y="5">GND</text></g>
-    <g transform="translate(0,224)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 4</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e8b923" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e8b923"/><text x="560" y="5">SCL <tspan fill="#8a8f99">(also called SCK / CLK)</tspan></text></g>
-    <g transform="translate(0,256)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 6</text><line x1="230" y1="0" x2="548" y2="0" stroke="#2f7de1" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#2f7de1"/><text x="560" y="5">SDA <tspan fill="#8a8f99">(also called MOSI / DIN)</tspan></text></g>
-    <g transform="translate(0,288)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 10</text><line x1="230" y1="0" x2="548" y2="0" stroke="#2fa35c" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#2fa35c"/><text x="560" y="5">DC</text></g>
+    <g transform="translate(0,224)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 4</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e8b923" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e8b923"/><text x="560" y="5">SCL <tspan fill="#8a8f99">(also CLK / D0)</tspan></text></g>
+    <g transform="translate(0,256)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 6</text><line x1="230" y1="0" x2="548" y2="0" stroke="#2f7de1" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#2f7de1"/><text x="560" y="5">SDA <tspan fill="#8a8f99">(also DIN / D1)</tspan></text></g>
+    <g transform="translate(0,288)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 10</text><line x1="230" y1="0" x2="548" y2="0" stroke="#2fa35c" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#2fa35c"/><text x="560" y="5">DC <tspan fill="#8a8f99">(also D/C)</tspan></text></g>
     <g transform="translate(0,320)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 7</text><line x1="230" y1="0" x2="548" y2="0" stroke="#ef7d22" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#ef7d22"/><text x="560" y="5">CS</text></g>
-    <g transform="translate(0,352)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 3</text><line x1="230" y1="0" x2="548" y2="0" stroke="#8b5cd6" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#8b5cd6"/><text x="560" y="5">RST</text></g>
-    <g transform="translate(0,384)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 1</text><line x1="230" y1="0" x2="548" y2="0" stroke="#9aa0aa" stroke-width="4" stroke-dasharray="10 5"/><circle cx="230" cy="0" r="5" fill="#9aa0aa"/><text x="560" y="5">BL <tspan fill="#8a8f99">(skip if your display has no BL pin)</tspan></text></g>
-
-    <!-- LED ring -->
-    <g transform="translate(0,452)"><text x="218" y="5" text-anchor="end" fill="#fff">5V</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e0453a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e0453a"/><text x="560" y="5">5V / VCC <tspan fill="#8a8f99">(the "IN" side)</tspan></text></g>
-    <g transform="translate(0,484)"><text x="218" y="5" text-anchor="end" fill="#fff">GND</text><line x1="230" y1="0" x2="548" y2="0" stroke="#30333a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#30333a"/><text x="560" y="5">GND</text></g>
-    <g transform="translate(0,516)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 0</text><line x1="230" y1="0" x2="360" y2="0" stroke="#1fb5c9" stroke-width="4"/><rect x="360" y="-9" width="56" height="18" rx="4" fill="#d9c49a" stroke="#8a6d3b"/><text x="388" y="5" font-size="11" text-anchor="middle">330 Ω</text><line x1="416" y1="0" x2="548" y2="0" stroke="#1fb5c9" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#1fb5c9"/><text x="560" y="5">DI / DIN <tspan fill="#8a8f99">(not DO / DOUT)</tspan></text></g>
-
-    <!-- button -->
-    <g transform="translate(0,580)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 5</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e05aa6" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e05aa6"/><text x="560" y="5">NO <tspan fill="#8a8f99">(normally open)</tspan></text></g>
-    <g transform="translate(0,610)"><text x="218" y="5" text-anchor="end" fill="#fff">GND</text><line x1="230" y1="0" x2="548" y2="0" stroke="#30333a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#30333a"/><text x="560" y="5">COM</text></g>
+    <g transform="translate(0,352)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 3</text><line x1="230" y1="0" x2="548" y2="0" stroke="#8b5cd6" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#8b5cd6"/><text x="560" y="5">RES <tspan fill="#8a8f99">(also RST)</tspan></text></g>
+    <g transform="translate(0,426)"><text x="218" y="5" text-anchor="end" fill="#fff">GPIO 5</text><line x1="230" y1="0" x2="548" y2="0" stroke="#e05aa6" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#e05aa6"/><text x="560" y="5">either pin</text></g>
+    <g transform="translate(0,456)"><text x="218" y="5" text-anchor="end" fill="#fff">GND</text><line x1="230" y1="0" x2="548" y2="0" stroke="#30333a" stroke-width="4"/><circle cx="230" cy="0" r="5" fill="#30333a"/><text x="560" y="5">the other pin</text></g>
   </g>
-  <text x="40" y="654" font-size="12" fill="#8a8f99">GND appears three times — they're the same pin; twist the ground wires together.</text>
+  <text x="40" y="504" font-size="12" fill="#8a8f99">The OLED must be in 4-wire SPI mode (most are sold that way; the seller's page shows which resistors set it). Other OLED pins (D2–D7, R/W, E) stay unconnected.</text>
 </svg>
