@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+bridge.log*
+firmware/.pio/
+firmware/.vscode/
