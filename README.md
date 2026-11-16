@@ -2,6 +2,14 @@
 
 A clean little block for your desk: a wide screen on the front and one long press bar across the top. Press the bar anywhere to start or stop the Timer. The screen shows how long you've been going, which app you're in, and today's total.
 
+![what it looks like while recording](preview/look_recording.png)
+
+These screen pictures come from the **real firmware drawing code**, compiled and run on a PC (`firmware/host-preview/render.py`). The device pictures around them are mock-ups.
+
+| Ready | PC offline | Prototype (0.96" screen) |
+|---|---|---|
+| ![ready](preview/look_ready.png) | ![offline](preview/look_offline.png) | ![prototype](preview/look_prototype.png) |
+
 ![rendered model](preview/assembly.png)
 
 | Front view (to scale) | Printed parts, laid out for printing |
@@ -138,7 +146,9 @@ Its log is `desk-button\bridge.log`.
 
 - ✅ `enclosure.scad` renders in OpenSCAD 2021.01, and all five parts export as clean, watertight STL files.
 - ✅ `bridge.py`'s database reading and Timer detection were tested against the live Timer on this PC, with both Pythons. Both Windows events exist. Toggling wasn't fired, so your tracking wasn't disturbed.
-- ⚠️ The firmware is **not compiled yet** (PlatformIO isn't installed here). It uses the standard U8g2 display library. Expect at most a small fix on the first build.
+- ✅ All four firmware builds (`bare`, `proto`, `proto13`, `final`) compile with PlatformIO, with no warnings. Each uses about 5 % of RAM and 23 % of flash.
+- ✅ The screen layouts were checked by running the real drawing code on the PC (`preview/screens/`). After any change to `main.cpp`, re-run `python firmware/host-preview/render.py`; it needs `pip install pillow ziglang`.
+- ⚠️ Not yet run on a real board.
 - ⚠️ The hinge feel, the switch preload and the serial link all need the real parts to check. If the bar rattles, increase `choc_above_plate` by 0.3 mm. If it won't rest on the ledge, decrease it.
 
 ## Proposed follow-up for `timer.py` (not done, because another session is editing it)

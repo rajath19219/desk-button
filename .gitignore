@@ -3,3 +3,4 @@ __pycache__/
 bridge.log*
 firmware/.pio/
 firmware/.vscode/
+firmware/host-preview/build/

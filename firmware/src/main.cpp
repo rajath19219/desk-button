@@ -167,11 +167,29 @@ void drawFitted(const char *s, int x, int y, int maxW) { // clip long app names 
   char buf[40];
   strncpy(buf, s, sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = 0;
-  while (strlen(buf) > 2 && oled.getStrWidth(buf) > maxW) {
+  if (oled.getStrWidth(buf) > maxW) {
     size_t n = strlen(buf);
-    buf[n - 3] = '.'; buf[n - 2] = '.'; buf[n - 1] = 0;
+    while (n > 1 && (oled.getStrWidth(buf) > maxW - oled.getStrWidth("..") || buf[n - 1] == ' ')) buf[--n] = 0;
+    strcat(buf, "..");
   }
   oled.drawStr(x, y, buf);
+}
+
+// Big fonts have a very wide space; draw "3h 12m" word by word with a small gap instead.
+int drawWords(const char *s, int x, int y, int gap) {
+  char buf[24];
+  strncpy(buf, s, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = 0;
+  for (char *w = strtok(buf, " "); w; w = strtok(nullptr, " ")) x += oled.drawStr(x, y, w) + gap;
+  return x - gap;
+}
+int wordsWidth(const char *s, int gap) {
+  char buf[24];
+  strncpy(buf, s, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = 0;
+  int w = 0, n = 0;
+  for (char *t = strtok(buf, " "); t; t = strtok(nullptr, " "), n++) w += oled.getStrWidth(t);
+  return w + (n > 1 ? (n - 1) * gap : 0);
 }
 
 #if DISPLAY_KIND == 2
@@ -218,7 +236,7 @@ void drawScreen() {
     oled.drawStr(8 + ox, 14 + oy, "TODAY");
     fmtDuration(todayNow(), big, sizeof(big));
     oled.setFont(u8g2_font_logisoso32_tf);
-    oled.drawStr(6 + ox, 53 + oy, big);
+    drawWords(big, 6 + ox, 53 + oy, 8);
     int rx = 182 + ox;
     oled.drawCircle(rx + 4, 13 + oy, 4);
     oled.setFont(u8g2_font_helvB10_tr);
@@ -246,10 +264,12 @@ void drawScreen() {
     oled.setFont(u8g2_font_helvR08_tr);
     oled.drawStr(64 - oled.getStrWidth("run bridge.py") / 2, 48, "run bridge.py");
   } else {
-    fmtDuration(todayNow(), small, sizeof(small));
-    char today[32];
-    snprintf(today, sizeof(today), "today %s", small);
-    oled.drawStr(128 - oled.getStrWidth(today), 10, today);
+    if (running) {
+      fmtDuration(todayNow(), small, sizeof(small));
+      char today[32];
+      snprintf(today, sizeof(today), "today %s", small);
+      oled.drawStr(128 - oled.getStrWidth(today), 10, today);
+    }
     oled.setFont(u8g2_font_helvB08_tr);
     if (running) {
       if ((now / 1000) % 2 == 0) oled.drawDisc(4, 5, 3); else oled.drawCircle(4, 5, 3);
@@ -265,7 +285,7 @@ void drawScreen() {
       oled.drawStr(11, 10, "READY");
       oled.setFont(u8g2_font_logisoso22_tf);
       fmtDuration(todayNow(), big, sizeof(big));
-      oled.drawStr(64 - oled.getStrWidth(big) / 2, 44, big);
+      drawWords(big, 64 - wordsWidth(big, 6) / 2, 44, 6);
       oled.setFont(u8g2_font_helvR08_tr);
       oled.drawStr(64 - oled.getStrWidth("press to start") / 2, 62, "press to start");
     }
